@@ -1,14 +1,4 @@
-/**
- * Lightweight Task parser (PoC)
- *
- * parseFileContent(content, path) => TaskLite[]
- *
- * NOTE: This is a simplified parser for PoC. Later iterations should:
- * - support dataview inline fields
- * - support recurring tasks parsing (rrule)
- * - support more status symbols and custom task formats
- */
-
+import chrono from 'chrono-node';
 import moment from 'moment';
 
 export interface TaskLite {
@@ -25,11 +15,60 @@ export interface TaskLite {
     rawLine: string;
 }
 
+// Support - [ ], * [ ], 1. [ ] etc.
 const TASK_LINE_REGEX = /^(\s*)([-*+]|\d+\.)\s*\[([ xX\-\/\+?])\]\s*(.*)$/;
 
+// Inline dataview-like field: [due:: 2023-07-12]
+const INLINE_FIELD_REGEX = /(?:\[|\()\s*([^:\]]+)::\s*([^\]\)]+)\s*(?:\]|\))/g;
+
 /**
- * Parse single line into TaskLite partial (doesn't set id).
+ * Try to extract a date from text using several heuristics:
+ * - emoji date like 📅 YYYY-MM-DD
+ * - dataview inline field due:: YYYY-MM-DD
+ * - explicit `due on YYYY-MM-DD` or `due YYYY-MM-DD`
+ * - natural language via chrono (supports Chinese like 明天/下周一)
  */
+function extractDate(text: string): moment.Moment | null {
+    if (!text) return null;
+
+    // emoji date
+    const emojiMatch = text.match(/📅\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/);
+    if (emojiMatch) {
+        return moment(emojiMatch[1], 'YYYY-MM-DD');
+    }
+
+    // dataview inline field checks
+    let m: RegExpExecArray | null;
+    INLINE_FIELD_REGEX.lastIndex = 0; // reset
+    while ((m = INLINE_FIELD_REGEX.exec(text)) !== null) {
+        const key = m[1].trim().toLowerCase();
+        const val = m[2].trim();
+        if (['due', 'due date', 'due::', 'due_date', 'completion', 'done'].includes(key) || key === 'due') {
+            const parsed = chrono.parseDate(val);
+            if (parsed) return moment(parsed);
+            // fallback simple yyyy-mm-dd
+            const simple = val.match(/([0-9]{4}-[0-9]{2}-[0-9]{2})/);
+            if (simple) return moment(simple[1], 'YYYY-MM-DD');
+        }
+    }
+
+    // explicit due on yyyy-mm-dd
+    const dueMatch = text.match(/due(?: on)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
+    if (dueMatch) {
+        return moment(dueMatch[1], 'YYYY-MM-DD');
+    }
+
+    // try to let chrono parse natural language (including Chinese)
+    try {
+        const parsed = chrono.parseDate(text, new Date());
+        if (parsed) return moment(parsed);
+    } catch (e) {
+        // ignore
+    }
+
+    return null;
+}
+
 export function parseTaskLine(line: string): Partial<TaskLite> | null {
     const m = line.match(TASK_LINE_REGEX);
     if (!m) return null;
@@ -39,20 +78,16 @@ export function parseTaskLine(line: string): Partial<TaskLite> | null {
     const statusSymbol = m[3] ?? ' ';
     const body = m[4] ?? '';
 
-    // Extract tags of form #tag or #tag/subtag
-    const tags = Array.from(body.matchAll(/#([^\s#\/][^\s#]*)/g)).map((v) => v[0]);
-
-    // Try simple date extraction (emoji or "due on YYYY-MM-DD" or dataview-like)
-    let dueDate: moment.Moment | null = null;
-    const emojiDateMatch = body.match(/📅\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/);
-    if (emojiDateMatch) {
-        dueDate = moment(emojiDateMatch[1], 'YYYY-MM-DD');
-    } else {
-        const dueMatch = body.match(/due (?:on )?([0-9]{4}-[0-9]{2}-[0-9]{2})/);
-        if (dueMatch) {
-            dueDate = moment(dueMatch[1], 'YYYY-MM-DD');
-        }
+    // Tags: match #tag or #tag/subtag ... allow Chinese chars
+    const tagRegex = /#([^\s#\/][^\s#]*)/g;
+    const tags: string[] = [];
+    let tm: RegExpExecArray | null;
+    tagRegex.lastIndex = 0;
+    while ((tm = tagRegex.exec(body)) !== null) {
+        tags.push(tm[0]); // keep the leading # to be consistent
     }
+
+    const dueDate = extractDate(body);
 
     return {
         indentation,
@@ -66,9 +101,6 @@ export function parseTaskLine(line: string): Partial<TaskLite> | null {
     };
 }
 
-/**
- * Parse entire file content into TaskLite[] with line numbers
- */
 export function parseFileContent(content: string, filePath: string): TaskLite[] {
     const lines = content.split(/\r?\n/);
     const tasks: TaskLite[] = [];
