@@ -1,0 +1,14 @@
+{
+  "name": "project-task-manager",
+  "version": "0.0.1",
+  "description": "Project-level task management plugin for Obsidian — scaffold",
+  "main": "main.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc -w"
+  },
+  "devDependencies": {
+    "typescript": "^4.9.5"
+  },
+  "dependencies": {}
+}
