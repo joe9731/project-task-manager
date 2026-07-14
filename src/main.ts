@@ -2,6 +2,7 @@ import { App, Plugin, PluginSettingTab, Setting, Notice, MarkdownView, Workspace
 import { parseFileContent, TaskLite } from './TaskParser';
 import { ProjectTaskView, VIEW_TYPE_PROJECT_TASK } from './SidebarView';
 import { ProjectTaskSettings, DEFAULT_SETTINGS } from './Settings';
+import { Indexer } from './Indexer';
 
 /**
  * ProjectTaskManager - main plugin class
@@ -15,6 +16,7 @@ export default class ProjectTaskManager extends Plugin {
     viewLeaf: WorkspaceLeaf | null = null;
     tasksPlugin: any = null;
     enableTasksIntegration: boolean = false;
+    indexer: Indexer | null = null;
 
     async onload() {
         console.log('project-task-manager loading');
@@ -55,12 +57,14 @@ export default class ProjectTaskManager extends Plugin {
             callback: () => this.activateView(),
         });
 
-        // Initialize index (non-blocking)
-        this.initializeIndexer().catch((e) => console.error('Index init error', e));
+        // Initialize indexer
+        this.indexer = new Indexer(this);
+        this.indexer.start(this.settings.indexBatchSize ?? 50).catch((e) => console.error('Index init error', e));
     }
 
     onunload() {
         console.log('project-task-manager unloaded');
+        if (this.indexer) this.indexer.stop();
         this.app.workspace.detachLeavesOfType(VIEW_TYPE_PROJECT_TASK);
     }
 
@@ -80,60 +84,24 @@ export default class ProjectTaskManager extends Plugin {
         }, { activate: true });
     }
 
-    /**
-     * Initialize index: batch-scan vault markdown files and parse tasks.
-     */
-    async initializeIndexer(): Promise<void> {
-        const mdFiles = this.app.vault.getMarkdownFiles();
-        const batchSize = Math.max(20, this.settings.indexBatchSize ?? 50);
-
-        for (let i = 0; i < mdFiles.length; i += batchSize) {
-            const batch = mdFiles.slice(i, i + batchSize);
-            await Promise.all(batch.map(async (file) => {
-                try {
-                    const content = await this.app.vault.read(file);
-                    const tasks = parseFileContent(content, file.path);
-                    this.index.set(file.path, tasks);
-                } catch (e) {
-                    console.error('Error reading file', file.path, e);
-                }
-            }));
-
-            // yield to UI thread
-            await new Promise((r) => setTimeout(r, 10));
+    // NOTE: Indexer calls these public helpers via any-cast. Keep them available.
+    public rebuildAggregatedTasks() {
+        const all: TaskLite[] = [];
+        for (const tasks of this.index.values()) {
+            all.push(...tasks);
         }
+        this.aggregatedTasks = all;
+    }
 
-        this.rebuildAggregatedTasks();
-        this.emitIndexUpdated();
-
-        // subscribe to incremental updates
-        this.registerEvent(this.app.metadataCache.on('changed', (file) => {
-            if (!file) return;
-            this.handleFileChanged(file.path).catch(console.error);
-        }));
-
-        this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
-            if (!file) return;
-            // reindex renamed file path
-            this.handleFileChanged(file.path).catch(console.error);
-            // remove old mapping if present
-            if (this.index.has(oldPath)) {
-                const v = this.index.get(oldPath);
-                this.index.delete(oldPath);
-                // NOTE: we don't currently remap tasks id; rebuild aggregated
-                this.rebuildAggregatedTasks();
-                this.emitIndexUpdated();
+    public emitIndexUpdated() {
+        // Notify view to re-render if open
+        const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_PROJECT_TASK);
+        for (const leaf of leaves) {
+            const view = leaf.view as ProjectTaskView;
+            if (view && typeof view.onIndexUpdated === 'function') {
+                view.onIndexUpdated();
             }
-        }));
-
-        this.registerEvent(this.app.vault.on('delete', (file) => {
-            if (!file) return;
-            if (this.index.has(file.path)) {
-                this.index.delete(file.path);
-                this.rebuildAggregatedTasks();
-                this.emitIndexUpdated();
-            }
-        }));
+        }
     }
 
     private async handleFileChanged(path: string) {
@@ -154,25 +122,6 @@ export default class ProjectTaskManager extends Plugin {
             this.emitIndexUpdated();
         } catch (e) {
             console.error('Error re-reading changed file', path, e);
-        }
-    }
-
-    private rebuildAggregatedTasks() {
-        const all: TaskLite[] = [];
-        for (const tasks of this.index.values()) {
-            all.push(...tasks);
-        }
-        this.aggregatedTasks = all;
-    }
-
-    private emitIndexUpdated() {
-        // Notify view to re-render if open
-        const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_PROJECT_TASK);
-        for (const leaf of leaves) {
-            const view = leaf.view as ProjectTaskView;
-            if (view && typeof view.onIndexUpdated === 'function') {
-                view.onIndexUpdated();
-            }
         }
     }
 
