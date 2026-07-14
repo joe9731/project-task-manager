@@ -73,8 +73,8 @@ export default class ProjectTaskManager extends Plugin {
     }
 
     private async activateView() {
-        // Reveal or create right leaf
-        this.app.workspace.getRightLeaf(false).setViewState({
+        // Reveal or create left leaf (user preference: default left side)
+        this.app.workspace.getLeftLeaf(false).setViewState({
             type: VIEW_TYPE_PROJECT_TASK,
             active: true,
         }, { activate: true });
