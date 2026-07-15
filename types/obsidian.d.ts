@@ -1,6 +1,6 @@
 declare module 'obsidian' {
   // Minimal value-level + type-level declarations for Obsidian APIs used in this repo.
-  // These are permissive (any) but provide value-level symbols so tsc accepts "new/extends" and runtime usage.
+  // Permissive (any) to let the CI compile; replace with precise types later.
 
   export class Plugin {
     app: any;
@@ -16,7 +16,6 @@ declare module 'obsidian' {
     loadData(): Promise<any>;
     saveData(data: any): Promise<void>;
 
-    // Common registration helpers used in code
     addSettingTab(tab: any): void;
     registerView(type: string, factory: (leaf: any) => any): void;
     addRibbonIcon(icon: string, title: string, cb: () => void): void;
@@ -61,15 +60,13 @@ declare module 'obsidian' {
 
   export type TFile = any;
 
-  // Helpers commonly used in plugin code
   export function addIcon(name: string, svg: string): void;
 
-  // default export (some plugins import default)
   const _default: any;
   export default _default;
 }
 
-// Extend HTMLElement with Obsidian helpers used by createEl/empty in the code
+// Extend HTMLElement with Obsidian helper methods used in the code
 declare global {
   interface HTMLElement {
     createEl?(tag?: string, attrs?: any, callback?: (el: HTMLElement) => void): HTMLElement;
