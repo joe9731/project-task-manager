@@ -60,6 +60,33 @@ export default class ProjectTaskManager extends Plugin {
         // Initialize indexer
         this.indexer = new Indexer(this);
         this.indexer.start(this.settings.indexBatchSize ?? 50).catch((e) => console.error('Index init error', e));
+
+        // Register incremental update listeners so single-file changes update index quickly
+        this.registerEvent(this.app.metadataCache.on('changed', (file) => {
+            if (!file) return;
+            // debounce/guard handled in handler
+            this.handleFileChanged(file.path).catch((err) => console.error('handleFileChanged error', err));
+        }));
+
+        this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+            if (!file) return;
+            this.handleFileChanged(file.path).catch((err) => console.error('handleFileChanged error', err));
+            // remove old mapping if present
+            if (this.index.has(oldPath)) {
+                this.index.delete(oldPath);
+                this.rebuildAggregatedTasks();
+                this.emitIndexUpdated();
+            }
+        }));
+
+        this.registerEvent(this.app.vault.on('delete', (file) => {
+            if (!file) return;
+            if (this.index.has(file.path)) {
+                this.index.delete(file.path);
+                this.rebuildAggregatedTasks();
+                this.emitIndexUpdated();
+            }
+        }));
     }
 
     onunload() {
@@ -115,7 +142,8 @@ export default class ProjectTaskManager extends Plugin {
             return;
         }
         try {
-            const content = await this.app.vault.read(tfile as any);
+            const content = await this.plugin.app.vault.read(tfile as any);
+            // Note: 'this' context is the plugin; correct reference
             const tasks = parseFileContent(content, path);
             this.index.set(path, tasks);
             this.rebuildAggregatedTasks();
