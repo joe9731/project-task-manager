@@ -10,7 +10,8 @@
   },
   "devDependencies": {
     "typescript": "^4.9.5",
-    "ts-node": "^10.9.1"
+    "ts-node": "^10.9.1",
+    "@types/node": "^18.0.0"
   },
   "dependencies": {
     "moment": "^2.29.4",
