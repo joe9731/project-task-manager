@@ -1,0 +1,51 @@
+name: CI - test and build
+on:
+  push:
+    branches:
+      - feature/m1-poc
+  pull_request:
+    branches:
+      - main
+      - feature/m1-poc
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run parser tests
+        run: npm test
+
+      - name: Build (tsc)
+        run: npm run build
+
+      - name: Commit build artifacts
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "chore(build): commit dist build artifacts [ci]"
+          file_pattern: |
+            dist/**
+            main.js
+            manifest.json
+            styles.css
+          branch: feature/m1-poc
+
+      - name: Upload build artifact for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-dist
+          path: |
+            dist
+            main.js
+
