@@ -1,0 +1,5 @@
+Trigger CI build
+
+Timestamp: 2026-07-15T13:46:00Z
+
+This file was updated to trigger the CI workflow that runs tests and builds.
