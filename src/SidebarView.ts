@@ -170,7 +170,15 @@ export class ProjectTaskView extends ItemView {
             const ul = fileDiv.createEl('div', { cls: 'ptm-task-list' });
             for (const t of list) {
                 const item = ul.createEl('div', { cls: 'ptm-task-item' });
-                item.createEl('span', { text: t.statusSymbol === ' ' ? '[ ]' : `[${t.statusSymbol}]`, cls: 'ptm-task-status' });
+                const statusEl = item.createEl('span', { text: t.statusSymbol === ' ' ? '[ ]' : `[${t.statusSymbol}]`, cls: 'ptm-task-status' });
+                statusEl.onclick = async (e) => {
+                    e.preventDefault();
+                    try {
+                        await this.plugin.toggleTaskStatus(t);
+                    } catch (err) {
+                        console.error('toggleTaskStatus failed', err);
+                    }
+                };
                 const desc = item.createEl('a', { text: t.description, cls: 'ptm-task-desc' });
                 desc.onclick = async (e) => {
                     e.preventDefault();
@@ -195,9 +203,9 @@ export class ProjectTaskView extends ItemView {
 
             // Try to move cursor to line if a MarkdownView is active
             const view = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
-            if (view && view.editor) {
-                view.editor.setCursor({ line: Math.max(0, task.lineNumber - 1), ch: 0 });
-                view.editor.focus();
+            if (view && (view as any).editor) {
+                (view as any).editor.setCursor({ line: Math.max(0, task.lineNumber - 1), ch: 0 });
+                (view as any).editor.focus();
                 // scroll to cursor
                 (view as any).editor.scrollIntoView({ line: task.lineNumber - 1, ch: 0 });
             }

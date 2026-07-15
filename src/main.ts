@@ -3,6 +3,7 @@ import { parseFileContent, TaskLite } from './TaskParser';
 import { ProjectTaskView, VIEW_TYPE_PROJECT_TASK } from './SidebarView';
 import { ProjectTaskSettings, DEFAULT_SETTINGS } from './Settings';
 import { Indexer } from './Indexer';
+import { adaptExternalTasks } from './TasksAdapter';
 
 /**
  * ProjectTaskManager - main plugin class
@@ -199,14 +200,61 @@ export default class ProjectTaskManager extends Plugin {
       try {
         const external = this.tasksPlugin.getTasks();
         if (Array.isArray(external) && external.length > 0) {
-          // Adapter missing: TODO implement external->TaskLite mapping
-          console.log('Using tasksPlugin.getTasks() as source (adapter not implemented yet)');
+          const adapted = adaptExternalTasks(external, 'tasks-plugin');
+          if (adapted.length > 0) return adapted;
         }
       } catch (e) {
         console.warn('Error reading tasksPlugin.getTasks()', e);
       }
     }
+
     return this.aggregatedTasks;
+  }
+
+  /**
+   * Toggle a task's checkbox status in the underlying file. If checked -> unchecked and vice versa.
+   * After modifying the file, reparse and update the index.
+   */
+  public async toggleTaskStatus(task: TaskLite): Promise<void> {
+    if (!task || !task.filePath) return;
+    try {
+      const tfile = this.app.vault.getAbstractFileByPath(task.filePath) as TFile | null;
+      let content: string;
+      if (tfile) content = await this.app.vault.read(tfile as any);
+      else content = await this.app.vault.read(task.filePath as any);
+
+      const lines = content.split(/\r?\n/);
+      const lineIdx = Math.max(0, (task.lineNumber || 1) - 1);
+      if (lineIdx >= lines.length) return;
+
+      const line = lines[lineIdx];
+      // Replace checkbox char inside [ ]
+      const replaced = line.replace(/(\[)\s*([ xX\-\/\+\?])\s*(\])/, (m, a, s, c) => {
+        const cur = (s || ' ').trim().toLowerCase();
+        let next = 'x';
+        if (cur === 'x') next = ' ';
+        return `${a}${next}${c}`;
+      });
+
+      if (replaced === line) {
+        // If no match, try to inject checkbox
+        lines[lineIdx] = `- [x] ${line}`;
+      } else {
+        lines[lineIdx] = replaced;
+      }
+
+      const newContent = lines.join('\n');
+      if (tfile) await this.app.vault.modify(tfile as any, newContent);
+      else await this.app.vault.modify({ path: task.filePath } as any, newContent);
+
+      // Re-parse the file and update index
+      const newTasks = parseFileContent(newContent, task.filePath);
+      this.index.set(task.filePath, newTasks);
+      this.rebuildAggregatedTasks();
+      this.emitIndexUpdated();
+    } catch (e) {
+      console.error('toggleTaskStatus error', e);
+    }
   }
 }
 
