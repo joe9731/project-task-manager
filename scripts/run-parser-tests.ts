@@ -16,8 +16,8 @@ async function run() {
   assert(t1.length === 3, `expected 3 tasks, got ${t1.length}`);
   assert(t1[0].tags.includes('#项目管理/ProjA'), 'first task should include project tag');
   assert(t1[0].dueDate !== undefined && t1[0].dueDate !== null, 'first task should have dueDate parsed from emoji');
-  // Coerce to boolean to satisfy TypeScript strict checks
-  assert(Boolean(t1[2].indentation && t1[2].indentation.trim().length > 0), 'subtask should preserve indentation');
+  // Check indentation length (preserve raw whitespace)
+  assert(Boolean(t1[2].indentation && t1[2].indentation.length > 0), 'subtask should preserve indentation');
 
   // Case 2: inline dataview fields and Chinese natural language
   const sample2 = `- [ ] 中国任务 due:: 2026-07-25 #中国\n- [ ] 明天要做的事 #日常`;

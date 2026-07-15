@@ -21,6 +21,8 @@ const TASK_LINE_REGEX = /^(\s*)([-*+]|\d+\.)\s*\[\s*([ xX\-\/\+\?])\s*\]\s*(.*)$
 
 // Inline dataview-like field: [due:: 2023-07-12] or (due:: 2023-07-12)
 const INLINE_FIELD_REGEX = /(?:\[|\()\s*([^:\]\)]+?)::\s*([^\]\)]+?)\s*(?:\]|\))/g;
+// Bare inline like: due:: 2023-07-12 or scheduled:: 2026-07-01 (without brackets)
+const BARE_INLINE_REGEX = /(?:^|\s)(due(?: date|_date)?|scheduled|schedule|start)::\s*([^\s#)\]]+)/i;
 
 /**
  * Try to extract a date from text using several heuristics:
@@ -72,6 +74,20 @@ function extractDate(text: string): { due: moment.Moment | null; scheduled: mome
         }
     }
 
+    // bare inline fields like `due:: 2026-07-25` (without brackets)
+    const bare = text.match(BARE_INLINE_REGEX);
+    if (bare) {
+        const key = (bare[1] || '').trim().toLowerCase();
+        const val = (bare[2] || '').trim();
+        if (key.includes('due')) {
+            const p = parseDateCandidate(val);
+            if (p) due = p;
+        } else if (key.includes('schedule') || key.includes('scheduled') || key.includes('start')) {
+            const p = parseDateCandidate(val);
+            if (p) scheduled = p;
+        }
+    }
+
     // explicit due on yyyy-mm-dd
     const dueMatch = text.match(/due(?: on)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
     if (dueMatch) due = moment(dueMatch[1], 'YYYY-MM-DD');
@@ -107,8 +123,17 @@ export function parseTaskLine(line: string): Partial<TaskLite> | null {
         const val = (im[2] || '').trim();
         if (key) inlineFields[key.toLowerCase()] = val;
     }
-    // Remove inline fields from body
-    body = body.replace(INLINE_FIELD_REGEX, '').trim();
+
+    // Also detect bare inline fields like `due:: 2026-07-25` in the body
+    const bareMatch = body.match(BARE_INLINE_REGEX);
+    if (bareMatch) {
+        const key = (bareMatch[1] || '').trim().toLowerCase();
+        const val = (bareMatch[2] || '').trim();
+        if (key) inlineFields[key.toLowerCase()] = val;
+    }
+
+    // Remove inline fields from body (bracketed ones). Note: bare inline remains in body if not removed explicitly; remove it now.
+    body = body.replace(INLINE_FIELD_REGEX, '').replace(BARE_INLINE_REGEX, '').trim();
 
     // Emoji date removal (keep parsed info but remove token from description)
     body = body.replace(/📅\s*[0-9]{4}-[0-9]{2}-[0-9]{2}/g, '').trim();
