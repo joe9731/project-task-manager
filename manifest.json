@@ -1,10 +1,9 @@
 {
   "id": "project-task-manager",
   "name": "Project Task Manager",
-  "version": "0.0.1",
+  "version": "0.0.1-build",
   "minAppVersion": "0.12.0",
-  "description": "Project-level views and reports built on top of vault tasks, with optional Tasks plugin integration.",
-  "author": "your-name",
-  "authorUrl": "",
-  "isDesktopOnly": false
+  "description": "Project-level task management plugin (M1 PoC build).",
+  "author": "joe9731",
+  "main": "main.js"
 }

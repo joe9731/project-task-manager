@@ -1,0 +1,9 @@
+/* Styles for Project Task Manager (PoC build) */
+.ptm-header { padding: 8px; }
+.ptm-dashboard { margin: 8px 0; }
+.ptm-projects { display: flex; gap: 8px; flex-wrap: wrap; }
+.ptm-project-card { border: 1px solid var(--background-modifier-border); padding: 8px; border-radius: 4px; width: 200px; cursor: pointer; }
+.ptm-task-tree { margin-top: 12px; }
+.ptm-task-item { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+.ptm-task-desc { color: var(--text-normal); text-decoration: none; }
+.ptm-task-desc:hover { text-decoration: underline; }
