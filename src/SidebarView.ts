@@ -26,7 +26,8 @@ export class ProjectTaskView extends ItemView {
     }
 
     async onOpen() {
-        this.containerEl = this.containerEl; // for typing
+        // Correctly reference the view's content element
+        this.containerEl = this.contentEl;
         this.render();
     }
 
@@ -89,7 +90,7 @@ export class ProjectTaskView extends ItemView {
 
         // Project selector (dropdown)
         const selector = this.containerEl.createEl('select', { cls: 'ptm-project-selector' }) as HTMLSelectElement;
-        const allOption = selector.createEl ? selector.createEl('option') : document.createElement('option');
+        const allOption = document.createElement('option');
         allOption.text = '(all projects)';
         allOption.value = '(all)';
         selector.appendChild(allOption);
